@@ -152,20 +152,25 @@ class CrossLingualBridge:
 
     def bridge_text(self, parsed, translation: str, channel: str | None = None,
                     terminology: bool | None = None) -> str:
-        """Compose the translated channel from the frozen parser, not free text."""
+        """Compose the translated channel from the frozen parser, not free text.
+
+        The parser rewrite runs first and the terminology repair second, so a
+        concept the rewrite already reintroduced is not appended a second time.
+        """
         from curio.query import parse_query
         from curio.query.terminology import repair_translation
 
         channel = channel or self.config.channel
         use_terminology = self.config.terminology if terminology is None else terminology
-        if use_terminology:
-            translation = repair_translation(getattr(parsed, "query", "") or "", translation,
-                                             getattr(parsed, "slots", None))
         if channel == "raw":
-            return translation
-        rewritten = parse_query(translation).rewritten
-        if channel == "rewritten":
-            return rewritten
-        if channel == "plus_slots":
-            return f"{translation} {parsed.rewritten}".strip()
-        raise ValueError(f"Unknown channel {channel!r}")
+            text = translation
+        elif channel == "rewritten":
+            text = parse_query(translation).rewritten
+        elif channel == "plus_slots":
+            text = f"{translation} {parsed.rewritten}".strip()
+        else:
+            raise ValueError(f"Unknown channel {channel!r}")
+        if use_terminology:
+            text = repair_translation(getattr(parsed, "query", "") or "", text,
+                                      getattr(parsed, "slots", None))
+        return text

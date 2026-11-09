@@ -29,6 +29,35 @@ FILES = {
 BASE = "https://modelscope.cn/models/{repo}/resolve/master/{name}"
 
 
+def fetch(url: str, destination: Path, size: int, attempts: int = 8) -> None:
+    """Resume-capable download; survives the read timeouts seen on this network."""
+    for attempt in range(1, attempts + 1):
+        have = destination.stat().st_size if destination.exists() else 0
+        if have == size:
+            return
+        headers = {"User-Agent": "curio-download"}
+        if have:
+            headers["Range"] = f"bytes={have}-"
+        request = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response, destination.open("ab") as handle:
+                while True:
+                    chunk = response.read(1 << 20)
+                    if not chunk:
+                        break
+                    handle.write(chunk)
+                    have += len(chunk)
+                    if size > 50_000_000 and have % (200 << 20) < (1 << 20):
+                        print(f"  {destination.name}: {have / 1e6:.0f} MB / {size / 1e6:.0f} MB", flush=True)
+        except Exception as error:  # noqa: BLE001 - network flakiness is expected here
+            print(f"  retry {attempt}/{attempts} after {type(error).__name__}: {error}", flush=True)
+            time.sleep(min(30, 2 ** attempt))
+            continue
+        if destination.stat().st_size == size:
+            return
+    raise SystemExit(f"Could not complete {destination.name} after {attempts} attempts")
+
+
 def download(repo: str, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     for name, size in FILES[repo]:
@@ -38,22 +67,10 @@ def download(repo: str, target: Path) -> None:
             continue
         url = BASE.format(repo=repo, name=name)
         started = time.perf_counter()
-        request = urllib.request.Request(url, headers={"User-Agent": "curio-download"})
-        with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as handle:
-            total = 0
-            while True:
-                chunk = response.read(1 << 20)
-                if not chunk:
-                    break
-                handle.write(chunk)
-                total += len(chunk)
-                if size > 50_000_000 and total % (200 << 20) < (1 << 20):
-                    print(f"  {name}: {total / 1e6:.0f} MB / {size / 1e6:.0f} MB", flush=True)
+        fetch(url, destination, size)
         elapsed = time.perf_counter() - started
         digest = hashlib.sha256(destination.read_bytes()).hexdigest()
-        print(f"[ok] {name} {total} bytes in {elapsed:.1f}s sha256={digest[:16]}", flush=True)
-        if total != size:
-            raise SystemExit(f"Size mismatch for {name}: {total} != {size}")
+        print(f"[ok] {name} {destination.stat().st_size} bytes in {elapsed:.1f}s sha256={digest[:16]}", flush=True)
 
 
 if __name__ == "__main__":

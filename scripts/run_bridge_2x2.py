@@ -156,6 +156,7 @@ def main() -> None:
               f"{bridge.translation_ms / 1000:.1f}s", flush=True)
 
     dev_texts: dict[tuple[str, bool], list[str]] = {}
+    changed: dict[tuple[str, bool], int] = {}
     for label, model_path in models:
         bridge = CrossLingualBridge(BridgeConfig(model_name=model_path))
         model_translations = translations[label][:len(dev.chinese)]
@@ -163,9 +164,10 @@ def main() -> None:
             dev_texts[(label, term)] = [
                 bridge.bridge_text(parsed, text, args.channel, term)
                 for parsed, text in zip(dev.parsed, model_translations)]
-    changed = {(label, term): sum(1 for source, text in zip(translations[label][:len(dev.chinese)], dev_texts[(label, term)])
-                                  if source.strip().rstrip(".") not in text)
-               for label, _ in models for term in (False, True)}
+        changed[(label, False)] = 0
+        changed[(label, True)] = sum(
+            1 for plain, repaired in zip(dev_texts[(label, False)], dev_texts[(label, True)])
+            if plain != repaired)
 
     curves: dict[str, dict] = {}
     for (label, term), texts in dev_texts.items():
