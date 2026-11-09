@@ -35,3 +35,4 @@ docs/source_text/
 docs/dsh_session_snapshot.json
 talk_with_dsh.txt
 bae42c1b75f431bbbba9c2db8b4e5c50.png
+.pytest_tmp/
