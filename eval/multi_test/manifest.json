@@ -1,0 +1,8 @@
+{
+ "split": "multi_test",
+ "count": 60,
+ "queries": 20,
+ "candidate_pool": "identical to eval/visual_test gallery (60 images)",
+ "construction": "20 multi-condition Chinese queries, each refining a visual_test query with at least one comma-separated added condition; qrels by conjunction derivation with visual re-judgment of base->=1 images",
+ "label_source": "ai_visual_refinement; AI-generated judgments, not human gold"
+}
